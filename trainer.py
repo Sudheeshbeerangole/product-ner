@@ -1,9 +1,13 @@
+"""
+Simple python script for training model
+"""
 __author__ = "UniCourt Inc"
 __version__ = "v1.0.0"
 __maintainer__ = "Search - Core & API"
 __email__ = "eng-search@unicourt.com"
 
-# train_ner.py
+import logging
+
 from transformers import (
     AutoTokenizer,
     AutoModelForTokenClassification,
@@ -11,11 +15,10 @@ from transformers import (
     Trainer,
     DataCollatorForTokenClassification
 )
-
 from datasets import Dataset
 
-import logging
 logging.basicConfig(level=logging.INFO)
+
 # === 1. Label Definitions ===
 labels = ["O", "B-quantity", "B-weight", "I-weight", "B-brand", "I-brand", "B-product_category","I-product_category"]
 label2id = {label: i for i, label in enumerate(labels)}
@@ -68,7 +71,7 @@ examples = [
     (["Buy", "four", "Amul", "ice", "cream", "cups"],
      ["O", "B-quantity", "B-brand", "B-product_category", "I-product_category", "B-product_category", "O"]),
 
-(["Add", "two", "500", "ml", "Bovonto", "soda", "bottles"],
+    (["Add", "two", "500", "ml", "Bovonto", "soda", "bottles"],
      ["O", "B-quantity", "B-weight", "I-weight", "B-brand", "B-product_category", "B-product_category"]),
 
     (["I", "want", "one", "kg", "Fortune", "basmati", "rice"],
@@ -124,10 +127,16 @@ model_name = "bert-base-uncased"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 def tokenize_and_align_labels(example):
+    """
+    Reads examples and tokenizes and align labels for each.
+    :param example:
+    :return:
+    """
     tokenized = tokenizer(example["tokens"], is_split_into_words=True, truncation=True)
     word_ids = tokenized.word_ids()
     aligned_labels = []
     previous_word_idx = None
+
     for word_idx in word_ids:
         if word_idx is None:
             aligned_labels.append(-100)
@@ -136,7 +145,9 @@ def tokenize_and_align_labels(example):
         else:
             aligned_labels.append(example["labels"][word_idx])
         previous_word_idx = word_idx
+
     tokenized["labels"] = aligned_labels
+
     return tokenized
 
 tokenized_dataset = dataset.map(tokenize_and_align_labels)
@@ -160,7 +171,6 @@ training_args = TrainingArguments(
     report_to="none"  # <<< suppresses WandB or TensorBoard warnings
 )
 
-
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -168,7 +178,7 @@ trainer = Trainer(
     tokenizer=tokenizer,
     data_collator=DataCollatorForTokenClassification(tokenizer)
 )
-print("✅ Tokenization complete. Starting training...")
+print("Tokenization complete. Starting training...")
 
 # === 5. Train ===
 trainer.train()
@@ -177,11 +187,15 @@ trainer.train()
 model.save_pretrained("./models/token_classifier")
 tokenizer.save_pretrained("./models/token_classifier")
 
-print("✅ Training complete and model saved.")
-
+print("Training complete and model saved.")
 
 # === 7. Simple Inference Function ===
 def predict(sentence):
+    """
+
+    :param sentence:
+    :return:
+    """
     model.eval()
     tokens = sentence.split()
     inputs = tokenizer(tokens, is_split_into_words=True, return_tensors="pt", truncation=True)
@@ -190,6 +204,7 @@ def predict(sentence):
 
     word_ids = inputs.word_ids()  # Maps subword tokens to word indices
     previous_word_idx = None
+
     print("\n--- Predictions ---")
     for i, word_idx in enumerate(word_ids):
         if word_idx is None or word_idx == previous_word_idx:
